@@ -72,8 +72,7 @@
     letter-spacing: 0.05em; color: var(--muted);
     display: flex; align-items: center; justify-content: space-between;
   }
-  .panel-chat { flex: 0 0 40%; }
-  .panel-response { flex: 0 0 calc(35% - 8px); }
+  .panel-chat { flex: 0 0 65%; }
   .panel-attestation { flex: 1 1 auto; }
 
   /* Chat panel */
@@ -122,25 +121,21 @@
     opacity: 0.5; cursor: not-allowed;
   }
 
-  /* Response panel */
-  .response-body {
-    flex: 1; overflow-y: auto; min-height: 0;
-    white-space: pre-wrap; line-height: 1.5;
+  /* Inline tool-call summary (replaces the old Agent Response panel) */
+  .tool-summary {
+    display: block;
+    align-self: flex-start;
+    margin: 4px 0 0 0;
+    background: transparent;
+    font-size: 11px;
+    color: var(--muted);
+    font-family: monospace;
+    white-space: pre-wrap;
+    word-break: break-all;
   }
-  .response-empty { color: var(--muted); font-style: italic; }
-  .tool-calls { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
-  .tool-calls summary {
-    cursor: pointer; color: var(--muted); font-size: 12px; user-select: none;
-  }
-  .tool-call {
-    margin-top: 8px; padding: 8px; background: var(--panel-2);
-    border: 1px solid var(--border); border-radius: 6px;
-    font-family: monospace; font-size: 11px;
-  }
-  .tool-call .name { color: #fff; font-weight: 600; }
-  .tool-call .status-Success { color: var(--green); }
-  .tool-call .status-Failed { color: var(--red); }
-  .tool-call pre { margin: 4px 0 0; color: var(--muted); white-space: pre-wrap; word-break: break-all; }
+  .tool-summary .line { display: block; }
+  .tool-summary .ok { color: var(--green); }
+  .tool-summary .bad { color: var(--red); }
 
   /* Attestation panel */
   .att-status {
@@ -255,14 +250,6 @@
       </div>
     </section>
 
-    <!-- Response panel -->
-    <section class="panel panel-response">
-      <h2>Agent Response</h2>
-      <div class="response-body" id="responseBody">
-        <div class="response-empty">Ask something about Cronos to get started</div>
-      </div>
-    </section>
-
     <!-- Attestation panel -->
     <section class="panel panel-attestation">
       <h2>
@@ -308,7 +295,6 @@
 
   const $ = (id) => document.getElementById(id);
   const messagesEl = $('messages');
-  const responseEl = $('responseBody');
   const inputEl = $('queryInput');
   const sendBtn = $('sendBtn');
   const clearBtn = $('clearBtn');
@@ -348,32 +334,43 @@
     return div;
   }
 
-  function renderResponse(finalResponse, functionResponses) {
-    responseEl.innerHTML = '';
-    const body = document.createElement('div');
-    body.textContent = finalResponse || '(no response)';
-    responseEl.appendChild(body);
+  function renderToolSummary(functionResponses) {
+    if (!functionResponses || functionResponses.length === 0) return;
 
-    if (functionResponses && functionResponses.length > 0) {
-      const details = document.createElement('details');
-      details.className = 'tool-calls';
-      details.open = false;
-      const summary = document.createElement('summary');
-      summary.textContent = `Tool calls (${functionResponses.length})`;
-      details.appendChild(summary);
+    const box = document.createElement('div');
+    box.className = 'tool-summary';
 
-      functionResponses.forEach((fr, i) => {
-        const tc = document.createElement('div');
-        tc.className = 'tool-call';
-        const status = fr.status || 'Unknown';
-        tc.innerHTML = `<span class="name">#${i + 1}</span> <span class="status-${status}">${status}</span>`;
-        const pre = document.createElement('pre');
-        pre.textContent = JSON.stringify(fr.data, null, 2);
-        tc.appendChild(pre);
-        details.appendChild(tc);
-      });
-      responseEl.appendChild(details);
-    }
+    functionResponses.forEach((fr) => {
+      const status = fr.status || 'Unknown';
+      const ok = status === 'Success';
+      const data = fr.data || {};
+      const name = data.name || data.functionName || data.tool || '';
+      // Pick a compact hint of the payload: prefer the stringified data
+      // minus the common wrapper noise, then truncate to 60 chars.
+      let hint;
+      if (typeof data === 'object' && data !== null) {
+        if ('message' in data && !ok) {
+          hint = String(data.message);
+        } else {
+          hint = JSON.stringify(data);
+        }
+      } else {
+        hint = String(data);
+      }
+      if (hint.length > 60) hint = hint.slice(0, 57) + '...';
+
+      const line = document.createElement('span');
+      line.className = 'line';
+      const mark = document.createElement('span');
+      mark.className = ok ? 'ok' : 'bad';
+      mark.textContent = ok ? '✓' : '✗';
+      line.appendChild(mark);
+      line.appendChild(document.createTextNode(' ' + (name ? name + ' → ' : '') + hint));
+      box.appendChild(line);
+    });
+
+    messagesEl.appendChild(box);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
   }
 
   async function sendQuery(query) {
@@ -390,41 +387,24 @@
     let agentBubble = null;
     let fullText = '';
     let lastFunctionResponses = [];
-    let responseBodyDiv = null;
 
     const handleEvent = (event) => {
       if (event.type === 'tools') {
         lastFunctionResponses = event.functionResponses || [];
         if (loadingEl && loadingEl.parentNode) loadingEl.remove();
         agentBubble = addMessage('agent', '');
-        responseEl.innerHTML = '';
-        responseBodyDiv = document.createElement('div');
-        const count = lastFunctionResponses.length;
-        if (count > 0) {
-          const header = document.createElement('div');
-          header.style.fontSize = '11px';
-          header.style.color = 'var(--muted)';
-          header.style.marginBottom = '8px';
-          header.textContent = 'Executed ' + count + ' tool call' + (count === 1 ? '' : 's') + '...';
-          responseEl.appendChild(header);
-        }
-        responseEl.appendChild(responseBodyDiv);
       } else if (event.type === 'token') {
         if (!agentBubble) {
           // No tools event arrived — model had nothing to call. Initialize now.
           if (loadingEl && loadingEl.parentNode) loadingEl.remove();
           agentBubble = addMessage('agent', '');
-          responseEl.innerHTML = '';
-          responseBodyDiv = document.createElement('div');
-          responseEl.appendChild(responseBodyDiv);
         }
         fullText += event.content || '';
         agentBubble.textContent = fullText;
-        if (responseBodyDiv) responseBodyDiv.textContent = fullText;
         messagesEl.scrollTop = messagesEl.scrollHeight;
       } else if (event.type === 'done') {
         context = event.context || context;
-        renderResponse(event.finalResponse || fullText, lastFunctionResponses);
+        renderToolSummary(lastFunctionResponses);
       } else if (event.type === 'error') {
         if (loadingEl && loadingEl.parentNode) loadingEl.remove();
         addMessage('agent', '⚠ Error: ' + (event.message || 'unknown'));
@@ -654,7 +634,6 @@
   clearBtn.addEventListener('click', () => {
     context = [];
     messagesEl.innerHTML = '';
-    responseEl.innerHTML = '<div class="response-empty">Ask something about Cronos to get started</div>';
     if (suggestionsEl) suggestionsEl.style.display = 'flex';
   });
   suggestionsEl.querySelectorAll('button').forEach((btn) => {
