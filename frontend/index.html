@@ -195,6 +195,37 @@
   .att-meta .tcb { font-family: monospace; color: var(--text); }
   .att-errors { margin-top: 8px; font-size: 11px; color: var(--red); }
 
+  /* Two-section attestation layout */
+  .panel-attestation h2 .att-subtitle {
+    font-size: 10px; font-weight: 500; text-transform: none;
+    letter-spacing: 0; color: var(--muted);
+  }
+  .att-scroll { flex: 1; overflow-y: auto; min-height: 0; }
+  .att-section { margin-bottom: 6px; }
+  .att-section + .att-section { margin-top: 14px; padding-top: 14px; border-top: 1px dashed var(--border); }
+  .att-section-header {
+    font-size: 10px; font-weight: 700; text-transform: uppercase;
+    letter-spacing: 0.08em; color: var(--muted); margin-bottom: 8px;
+    display: flex; align-items: center; gap: 6px;
+  }
+  .att-section-header::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--accent);
+  }
+  .att-section.secretai .att-section-header::before { background: var(--gold); }
+  .att-section .att-rows { flex: none; overflow: visible; }
+  .att-llm-info {
+    font-size: 11px; margin-bottom: 8px;
+    display: flex; flex-direction: column; gap: 2px;
+  }
+  .att-llm-info .row { display: flex; justify-content: space-between; gap: 8px; }
+  .att-llm-info .k { color: var(--muted); }
+  .att-llm-info .v { font-family: monospace; color: var(--text); word-break: break-all; text-align: right; }
+  .att-section-note {
+    font-size: 10px; color: var(--muted); font-style: italic;
+    margin-top: -4px; margin-bottom: 8px;
+  }
+
   /* scrollbar */
   ::-webkit-scrollbar { width: 8px; height: 8px; }
   ::-webkit-scrollbar-track { background: transparent; }
@@ -241,12 +272,34 @@
 
     <!-- Attestation panel -->
     <section class="panel panel-attestation">
-      <h2>🔒 TEE Attestation</h2>
-      <div id="attStatus" class="att-status yellow">⏳ Loading</div>
-      <div class="att-source" id="attSource"></div>
-      <div class="att-rows" id="attRows"></div>
-      <div class="att-meta" id="attMeta"></div>
-      <div class="att-errors" id="attErrors"></div>
+      <h2>
+        <span>🔒 TEE Attestation</span>
+        <span class="att-subtitle">Two separate hardware boundaries</span>
+      </h2>
+      <div class="att-scroll">
+
+        <!-- Section 1: This agent's SecretVM -->
+        <div class="att-section agent">
+          <div class="att-section-header">This Agent — SecretVM</div>
+          <div id="attStatus" class="att-status yellow">⏳ Loading</div>
+          <div class="att-source" id="attSource"></div>
+          <div class="att-rows" id="attRows"></div>
+          <div class="att-meta" id="attMeta"></div>
+          <div class="att-errors" id="attErrors"></div>
+        </div>
+
+        <!-- Section 2: SecretAI LLM's SecretVM -->
+        <div class="att-section secretai">
+          <div class="att-section-header">SecretAI LLM — SecretVM</div>
+          <div id="saStatus" class="att-status yellow">⏳ Loading</div>
+          <div class="att-section-note" id="saNote"></div>
+          <div class="att-llm-info" id="saInfo"></div>
+          <div class="att-rows" id="saRows"></div>
+          <div class="att-meta" id="saMeta"></div>
+          <div class="att-errors" id="saErrors"></div>
+        </div>
+
+      </div>
     </section>
   </main>
 </div>
@@ -271,6 +324,12 @@
   const attRowsEl = $('attRows');
   const attMetaEl = $('attMeta');
   const attErrorsEl = $('attErrors');
+  const saStatusEl = $('saStatus');
+  const saRowsEl = $('saRows');
+  const saMetaEl = $('saMeta');
+  const saErrorsEl = $('saErrors');
+  const saInfoEl = $('saInfo');
+  const saNoteEl = $('saNote');
 
   function truncate(s) {
     if (!s || typeof s !== 'string') return '(empty)';
@@ -362,7 +421,7 @@
       sendBtn.disabled = false;
       inputEl.value = '';
       inputEl.focus();
-      fetchAttestation();
+      fetchAllAttestations();
     }
   }
 
@@ -447,15 +506,88 @@
     ageEl.textContent = 'Last verified: ' + (s < 1 ? 'just now' : s + 's ago');
   }
 
-  async function fetchAttestation() {
-    try {
-      const res = await fetch(BACKEND_URL + '/api/attestation');
-      const data = await res.json();
-      renderAttestation(data);
-    } catch (e) {
+  function setStatusBadge(el, data) {
+    const isMock = data && data.mock === true;
+    const isValid = data && data.valid === true;
+    el.className = 'att-status ' + (isMock ? 'yellow' : isValid ? 'green' : 'red');
+    el.textContent = isMock ? '⚠ Mock Data' : isValid ? '✓ Attested' : '✗ Invalid';
+  }
+
+  function renderSecretAIAttestation(data) {
+    const report = data.report || {};
+    setStatusBadge(saStatusEl, data);
+
+    saNoteEl.textContent = data.mock
+      ? 'SecretAI attestation port may require network access'
+      : '';
+
+    saInfoEl.innerHTML =
+      '<div class="row"><span class="k">Model</span><span class="v">' + (data.model || 'unknown') + '</span></div>' +
+      '<div class="row"><span class="k">Endpoint</span><span class="v">' + (data.endpoint || 'unknown') + '</span></div>';
+
+    // Compact: only MR_TD and RTMR3 (the integrity measurement)
+    const fields = [
+      ['MR_TD', report.mr_td, false],
+      ['RTMR3', report.rt_mr3, true],
+    ];
+
+    saRowsEl.innerHTML = '';
+    fields.forEach(([label, value, highlight]) => {
+      const row = document.createElement('div');
+      row.className = 'att-row' + (highlight ? ' rtmr3' : '');
+      const lbl = document.createElement('div');
+      lbl.className = 'label';
+      lbl.textContent = label;
+      const val = document.createElement('div');
+      val.className = 'value';
+      val.textContent = truncate(value);
+      val.title = value || '(empty)';
+      let expanded = false;
+      val.addEventListener('click', () => {
+        expanded = !expanded;
+        val.textContent = expanded ? (value || '(empty)') : truncate(value);
+      });
+      row.appendChild(lbl);
+      row.appendChild(val);
+      if (highlight) {
+        const ann = document.createElement('div');
+        ann.className = 'annotation';
+        ann.textContent = 'Proves docker-compose.yaml integrity';
+        row.appendChild(ann);
+      }
+      saRowsEl.appendChild(row);
+    });
+
+    saMetaEl.innerHTML =
+      '<div>TCB status: <span class="tcb">' + (report.tcb_status || 'unknown') + '</span></div>';
+
+    saErrorsEl.textContent = (data.errors && data.errors.length > 0)
+      ? data.errors.join(' · ')
+      : '';
+  }
+
+  async function fetchAllAttestations() {
+    const results = await Promise.allSettled([
+      fetch(BACKEND_URL + '/api/attestation').then((r) => r.json()),
+      fetch(BACKEND_URL + '/api/secretai-attestation').then((r) => r.json()),
+    ]);
+
+    const [agentResult, secretaiResult] = results;
+
+    if (agentResult.status === 'fulfilled') {
+      renderAttestation(agentResult.value);
+    } else {
       attStatusEl.className = 'att-status red';
       attStatusEl.textContent = '✗ Unreachable';
-      attErrorsEl.textContent = e.message;
+      attErrorsEl.textContent = agentResult.reason?.message || 'fetch failed';
+    }
+
+    if (secretaiResult.status === 'fulfilled') {
+      renderSecretAIAttestation(secretaiResult.value);
+    } else {
+      saStatusEl.className = 'att-status red';
+      saStatusEl.textContent = '✗ Unreachable';
+      saErrorsEl.textContent = secretaiResult.reason?.message || 'fetch failed';
     }
   }
 
@@ -477,7 +609,7 @@
     });
   });
 
-  fetchAttestation();
+  fetchAllAttestations();
   setInterval(updateAttestationAge, 1000);
 </script>
 </body>
