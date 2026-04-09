@@ -1,8 +1,9 @@
 services:
   cronosxsecret:
     image: ghcr.io/mrgarbonzo/cronos-secret:latest
-    expose:
-      - "3000"
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
     environment:
       - PORT=3000
       - NODE_ENV=production
@@ -11,66 +12,9 @@ services:
       - DASHBOARD_API_KEY
       - EXPLORER_API_KEY
       - CHAIN_ID
-    restart: unless-stopped
-    networks:
-      - traefik
-    labels:
-      - traefik.enable=true
-      - traefik.http.routers.cronosxsecret.rule=PathPrefix(`/`)
-      - traefik.http.routers.cronosxsecret.entrypoints=websecure
-      - traefik.http.routers.cronosxsecret.tls=true
-      # SecretVM's boot pipeline injects a phantom `Host(<vm-domain>)` router
-      # on the Traefik service itself that points at Traefik's own port 80
-      # (no routers there → default 404). Default router priority = rule
-      # string length, so that Host(...) rule would beat our PathPrefix(/).
-      # Set an explicit high priority so ours always wins on a fresh SecretVM.
-      - traefik.http.routers.cronosxsecret.priority=1000
-      - traefik.http.services.cronosxsecret.loadbalancer.server.port=3000
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 15s
-
-  traefik:
-    image: traefik:v2.10
-    command:
-      - --api.insecure=false
-      - --providers.docker=true
-      - --providers.docker.exposedbydefault=false
-      - --entrypoints.web.address=:80
-      - --entrypoints.web.http.redirections.entrypoint.to=websecure
-      - --entrypoints.web.http.redirections.entrypoint.scheme=https
-      - --entrypoints.websecure.address=:443
-      - --providers.file.directory=/etc/traefik/dynamic
-      - --providers.file.watch=true
-    ports:
-      - 80:80
-      - 443:443
-    volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
-      - /mnt/secure/cert:/certs:ro
-    networks:
-      - traefik
-    configs:
-      - source: tls_config
-        target: /etc/traefik/dynamic/tls.yml
-    restart: unless-stopped
-
-networks:
-  traefik:
-    driver: bridge
-
-configs:
-  tls_config:
-    content: |-
-      tls:
-        certificates:
-          - certFile: /certs/secret_vm_fullchain.pem
-            keyFile: /certs/secret_vm_private.pem
-        stores:
-          default:
-            defaultCertificate:
-              certFile: /certs/secret_vm_fullchain.pem
-              keyFile: /certs/secret_vm_private.pem
