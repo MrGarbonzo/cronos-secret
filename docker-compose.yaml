@@ -19,6 +19,12 @@ services:
       - traefik.http.routers.cronosxsecret.rule=PathPrefix(`/`)
       - traefik.http.routers.cronosxsecret.entrypoints=websecure
       - traefik.http.routers.cronosxsecret.tls=true
+      # SecretVM's boot pipeline injects a phantom `Host(<vm-domain>)` router
+      # on the Traefik service itself that points at Traefik's own port 80
+      # (no routers there → default 404). Default router priority = rule
+      # string length, so that Host(...) rule would beat our PathPrefix(/).
+      # Set an explicit high priority so ours always wins on a fresh SecretVM.
+      - traefik.http.routers.cronosxsecret.priority=1000
       - traefik.http.services.cronosxsecret.loadbalancer.server.port=3000
     healthcheck:
       test: ["CMD", "wget", "-qO-", "http://localhost:3000/health"]
