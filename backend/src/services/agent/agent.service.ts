@@ -65,6 +65,50 @@ export class AIAgentService {
     return { functionResponses, finalResponse };
   }
 
+  /**
+   * Streaming variant of processInterpretation. Executes tool calls the
+   * same way, then streams the final response via the LLM service's
+   * streamFinalResponse method. Requires SecretAIService — other providers
+   * don't currently expose streaming.
+   */
+  public async processInterpretationStreaming(
+    interpretation: AIMessageResponse,
+    query: string,
+    context: QueryContext[],
+    onToken: (token: string) => void,
+    onToolsComplete?: (functionResponses: FunctionCallResponse[]) => void
+  ): Promise<{ functionResponses: FunctionCallResponse[]; finalResponse: string }> {
+    let functionResponses: FunctionCallResponse[] = [];
+    const functionsToExecute = interpretation.tool_calls;
+
+    if (functionsToExecute) {
+      functionResponses = await Promise.all(
+        functionsToExecute.map(async (toolCall) => {
+          const functionName = toolCall.function.name;
+          const functionArgs = JSON.parse(toolCall.function.arguments);
+          return await this.executeFunction(functionName, functionArgs);
+        })
+      );
+    }
+
+    if (onToolsComplete) {
+      onToolsComplete(functionResponses);
+    }
+
+    const secretai = this.llmService as SecretAIService;
+    if (typeof secretai.streamFinalResponse !== 'function') {
+      throw new Error('Streaming is only supported when the LLM provider is SecretAI');
+    }
+
+    const finalResponse = await secretai.streamFinalResponse(
+      query,
+      functionResponses,
+      context,
+      onToken
+    );
+    return { functionResponses, finalResponse };
+  }
+
   public updateContext(context: QueryContext[], query: string, response: string): QueryContext[] {
     context.push({ role: Role.User, content: query });
     context.push({ role: Role.Assistant, content: response });

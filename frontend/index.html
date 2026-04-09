@@ -6,14 +6,14 @@
 <title>Cronos AI Agent — Private &amp; Attested</title>
 <style>
   :root {
-    --bg: #0f0a08;
-    --panel: #1a0f0a;
-    --panel-2: #251510;
-    --border: #3a2018;
-    --text: #f5f0ec;
-    --muted: #9a8070;
+    --bg: #0d0d10;
+    --panel: #141418;
+    --panel-2: #1c1c22;
+    --border: #2a2a35;
+    --text: #f2f2f5;
+    --muted: #888899;
     --accent: #e84b17;
-    --accent-hover: #ff5a24;
+    --accent-hover: #f05a28;
     --green: #10b981;
     --yellow: #f59e0b;
     --red: #ef4444;
@@ -387,26 +387,88 @@
     addMessage('user', query);
     const loadingEl = addLoadingMessage();
 
+    let agentBubble = null;
+    let fullText = '';
+    let lastFunctionResponses = [];
+    let responseBodyDiv = null;
+
+    const handleEvent = (event) => {
+      if (event.type === 'tools') {
+        lastFunctionResponses = event.functionResponses || [];
+        if (loadingEl && loadingEl.parentNode) loadingEl.remove();
+        agentBubble = addMessage('agent', '');
+        responseEl.innerHTML = '';
+        responseBodyDiv = document.createElement('div');
+        const count = lastFunctionResponses.length;
+        if (count > 0) {
+          const header = document.createElement('div');
+          header.style.fontSize = '11px';
+          header.style.color = 'var(--muted)';
+          header.style.marginBottom = '8px';
+          header.textContent = 'Executed ' + count + ' tool call' + (count === 1 ? '' : 's') + '...';
+          responseEl.appendChild(header);
+        }
+        responseEl.appendChild(responseBodyDiv);
+      } else if (event.type === 'token') {
+        if (!agentBubble) {
+          // No tools event arrived — model had nothing to call. Initialize now.
+          if (loadingEl && loadingEl.parentNode) loadingEl.remove();
+          agentBubble = addMessage('agent', '');
+          responseEl.innerHTML = '';
+          responseBodyDiv = document.createElement('div');
+          responseEl.appendChild(responseBodyDiv);
+        }
+        fullText += event.content || '';
+        agentBubble.textContent = fullText;
+        if (responseBodyDiv) responseBodyDiv.textContent = fullText;
+        messagesEl.scrollTop = messagesEl.scrollHeight;
+      } else if (event.type === 'done') {
+        context = event.context || context;
+        renderResponse(event.finalResponse || fullText, lastFunctionResponses);
+      } else if (event.type === 'error') {
+        if (loadingEl && loadingEl.parentNode) loadingEl.remove();
+        addMessage('agent', '⚠ Error: ' + (event.message || 'unknown'));
+      }
+    };
+
     try {
-      const res = await fetch(BACKEND_URL + '/api/query', {
+      const res = await fetch(BACKEND_URL + '/api/query/stream', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query, context }),
       });
-      const data = await res.json();
-      loadingEl.remove();
 
-      if (!res.ok) {
-        const err = data.error || `HTTP ${res.status}`;
-        addMessage('agent', '⚠ Error: ' + err);
-        responseEl.innerHTML = '<div class="response-empty">Error: ' + err + '</div>';
-      } else {
-        context = data.context || context;
-        addMessage('agent', data.finalResponse || '(no response)');
-        renderResponse(data.finalResponse, data.functionResponses);
+      if (!res.ok || !res.body) {
+        throw new Error('HTTP ' + res.status);
+      }
+
+      const reader = res.body.getReader();
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      while (true) {
+        const { value, done } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+
+        let sepIndex;
+        while ((sepIndex = buffer.indexOf('\n\n')) !== -1) {
+          const rawEvent = buffer.slice(0, sepIndex);
+          buffer = buffer.slice(sepIndex + 2);
+          for (const line of rawEvent.split('\n')) {
+            if (line.startsWith('data: ')) {
+              const payload = line.slice(6);
+              try {
+                handleEvent(JSON.parse(payload));
+              } catch (e) {
+                console.error('bad SSE payload', payload, e);
+              }
+            }
+          }
+        }
       }
     } catch (e) {
-      loadingEl.remove();
+      if (loadingEl && loadingEl.parentNode) loadingEl.remove();
       addMessage('agent', '⚠ Network error: ' + e.message);
     } finally {
       inFlight = false;

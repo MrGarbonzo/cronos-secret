@@ -69,6 +69,59 @@ export class SecretAIService implements LLMService {
     }
   }
 
+  /**
+   * Streams the final response, calling onToken for each incremental
+   * delta from the LLM. Returns the fully assembled string when done.
+   * Messages array is built identically to generateFinalResponse.
+   */
+  public async streamFinalResponse(
+    query: string,
+    functionResponses: FunctionCallResponse[],
+    context: QueryContext[],
+    onToken: (token: string) => void
+  ): Promise<string> {
+    const messages: ChatCompletionMessageParam[] = [
+      this.createMessage(
+        'system',
+        'You are a helpful blockchain assistant running privately inside a Trusted Execution Environment. Your reasoning is confidential and hardware-attested. Help users interact with the Cronos blockchain.'
+      ),
+      ...context.map((ctx) => this.createMessage(this.mapRole(ctx.role), ctx.content)),
+      this.createMessage('user', query),
+    ];
+
+    if (this.lastAssistantMessage && this.lastAssistantMessage.tool_calls) {
+      messages.push({
+        role: 'assistant',
+        content: this.lastAssistantMessage.content,
+        tool_calls: this.lastAssistantMessage.tool_calls,
+      } as ChatCompletionMessageParam);
+
+      functionResponses.forEach((response, index) => {
+        messages.push({
+          role: 'tool',
+          content: JSON.stringify(response.data, null, 2),
+          tool_call_id: this.lastAssistantMessage?.tool_calls?.[index]?.id,
+        } as ChatCompletionMessageParam);
+      });
+    }
+
+    const stream = await this.client.chat.completions.create({
+      model: this.model,
+      messages,
+      stream: true,
+    });
+
+    let assembled = '';
+    for await (const chunk of stream) {
+      const token = chunk.choices[0]?.delta?.content || '';
+      if (token) {
+        assembled += token;
+        onToken(token);
+      }
+    }
+    return assembled || 'Unable to generate response';
+  }
+
   public async generateFinalResponse(
     query: string,
     functionResponses: FunctionCallResponse[],
