@@ -1,0 +1,446 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>Cronos AI Agent — Private &amp; Attested</title>
+<style>
+  :root {
+    --bg: #0a0a0f;
+    --panel: #12121a;
+    --panel-2: #1a1a25;
+    --border: #2a2a3a;
+    --text: #e5e7eb;
+    --muted: #8b8b9e;
+    --accent: #1a56db;
+    --accent-hover: #2563eb;
+    --gold: #f59e0b;
+    --gold-bg: rgba(245, 158, 11, 0.12);
+    --green: #10b981;
+    --yellow: #f59e0b;
+    --red: #ef4444;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; height: 100%;
+    background: var(--bg); color: var(--text);
+    font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+    font-size: 14px;
+    overflow: hidden;
+  }
+  .app { display: flex; flex-direction: column; height: 100vh; }
+
+  /* Header */
+  header {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 20px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    flex-shrink: 0;
+  }
+  header .title { display: flex; flex-direction: column; }
+  header .title h1 { margin: 0; font-size: 16px; font-weight: 600; color: #fff; }
+  header .title .subtitle { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  .secretvm-badge {
+    display: inline-flex; align-items: center; gap: 6px;
+    padding: 4px 10px;
+    background: rgba(16, 185, 129, 0.15);
+    color: var(--green);
+    border: 1px solid rgba(16, 185, 129, 0.35);
+    border-radius: 999px;
+    font-size: 11px; font-weight: 600;
+  }
+  .secretvm-badge::before {
+    content: ""; width: 6px; height: 6px; border-radius: 50%;
+    background: var(--green);
+  }
+
+  /* Main 3-panel layout */
+  main {
+    flex: 1; display: flex; gap: 12px;
+    padding: 12px; min-height: 0;
+  }
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 16px;
+    display: flex; flex-direction: column;
+    min-height: 0;
+  }
+  .panel h2 {
+    margin: 0 0 12px 0;
+    font-size: 12px; font-weight: 600; text-transform: uppercase;
+    letter-spacing: 0.05em; color: var(--muted);
+    display: flex; align-items: center; justify-content: space-between;
+  }
+  .panel-chat { flex: 0 0 40%; }
+  .panel-response { flex: 0 0 calc(35% - 8px); }
+  .panel-attestation { flex: 1 1 auto; }
+
+  /* Chat panel */
+  .chat-header-row { display: flex; align-items: center; justify-content: space-between; }
+  .clear-btn {
+    background: none; border: 1px solid var(--border);
+    color: var(--muted); font-size: 11px;
+    padding: 2px 8px; border-radius: 4px; cursor: pointer;
+  }
+  .clear-btn:hover { color: var(--text); border-color: var(--muted); }
+  .messages {
+    flex: 1; overflow-y: auto; min-height: 0;
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 4px;
+  }
+  .msg { max-width: 85%; padding: 8px 12px; border-radius: 10px; line-height: 1.4; white-space: pre-wrap; word-wrap: break-word; }
+  .msg.user { align-self: flex-end; background: var(--accent); color: #fff; border-bottom-right-radius: 2px; }
+  .msg.agent { align-self: flex-start; background: var(--panel-2); border: 1px solid var(--border); border-bottom-left-radius: 2px; }
+  .msg.loading { align-self: flex-start; background: var(--panel-2); border: 1px solid var(--border); color: var(--muted); }
+  .dot-typing::after {
+    content: "●"; display: inline-block; animation: blink 1.2s infinite;
+  }
+  @keyframes blink { 0%,80%,100% { opacity: 0.2; } 40% { opacity: 1; } }
+
+  .suggestions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+  .suggestions button {
+    background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--muted); font-size: 11px;
+    padding: 5px 10px; border-radius: 999px; cursor: pointer;
+  }
+  .suggestions button:hover { color: var(--text); border-color: var(--accent); }
+
+  .input-row { display: flex; gap: 8px; margin-top: 10px; }
+  .input-row input {
+    flex: 1; background: var(--panel-2); border: 1px solid var(--border);
+    color: var(--text); padding: 9px 12px; border-radius: 6px;
+    font-family: inherit; font-size: 13px;
+  }
+  .input-row input:focus { outline: none; border-color: var(--accent); }
+  .input-row button {
+    background: var(--accent); border: none; color: #fff;
+    padding: 0 16px; border-radius: 6px; cursor: pointer; font-weight: 600;
+  }
+  .input-row button:hover:not(:disabled) { background: var(--accent-hover); }
+  .input-row button:disabled, .input-row input:disabled {
+    opacity: 0.5; cursor: not-allowed;
+  }
+
+  /* Response panel */
+  .response-body {
+    flex: 1; overflow-y: auto; min-height: 0;
+    white-space: pre-wrap; line-height: 1.5;
+  }
+  .response-empty { color: var(--muted); font-style: italic; }
+  .tool-calls { margin-top: 14px; border-top: 1px solid var(--border); padding-top: 10px; }
+  .tool-calls summary {
+    cursor: pointer; color: var(--muted); font-size: 12px; user-select: none;
+  }
+  .tool-call {
+    margin-top: 8px; padding: 8px; background: var(--panel-2);
+    border: 1px solid var(--border); border-radius: 6px;
+    font-family: monospace; font-size: 11px;
+  }
+  .tool-call .name { color: #fff; font-weight: 600; }
+  .tool-call .status-Success { color: var(--green); }
+  .tool-call .status-Failed { color: var(--red); }
+  .tool-call pre { margin: 4px 0 0; color: var(--muted); white-space: pre-wrap; word-break: break-all; }
+
+  /* Attestation panel */
+  .att-status {
+    display: inline-block; padding: 4px 10px; border-radius: 999px;
+    font-size: 11px; font-weight: 700; margin-bottom: 10px;
+  }
+  .att-status.green { background: rgba(16,185,129,0.15); color: var(--green); border: 1px solid rgba(16,185,129,0.4); }
+  .att-status.yellow { background: rgba(245,158,11,0.15); color: var(--yellow); border: 1px solid rgba(245,158,11,0.4); }
+  .att-status.red { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.4); }
+
+  .att-rows { flex: 1; overflow-y: auto; min-height: 0; }
+  .att-row {
+    padding: 8px 10px; border: 1px solid var(--border);
+    border-radius: 6px; margin-bottom: 6px;
+    background: var(--panel-2);
+  }
+  .att-row .label { font-size: 10px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; }
+  .att-row .value {
+    font-family: monospace; font-size: 11px; margin-top: 3px;
+    word-break: break-all; cursor: pointer; color: var(--text);
+  }
+  .att-row.rtmr3 {
+    background: var(--gold-bg);
+    border-color: var(--gold);
+  }
+  .att-row.rtmr3 .label { color: var(--gold); font-weight: 700; }
+  .att-row.rtmr3 .annotation { font-size: 10px; color: var(--gold); margin-top: 3px; font-style: italic; }
+
+  .att-meta { margin-top: 10px; font-size: 11px; color: var(--muted); }
+  .att-meta .tcb { font-family: monospace; color: var(--text); }
+  .att-errors { margin-top: 8px; font-size: 11px; color: var(--red); }
+
+  /* scrollbar */
+  ::-webkit-scrollbar { width: 8px; height: 8px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+  ::-webkit-scrollbar-thumb:hover { background: var(--muted); }
+</style>
+</head>
+<body>
+<div class="app">
+  <header>
+    <div class="title">
+      <h1>Cronos AI Agent</h1>
+      <div class="subtitle">Powered by SecretAI (qwen3:8b) — Private &amp; Attested</div>
+    </div>
+    <div class="secretvm-badge">SecretVM</div>
+  </header>
+
+  <main>
+    <!-- Chat panel -->
+    <section class="panel panel-chat">
+      <h2 class="chat-header-row">
+        <span>Chat</span>
+        <button class="clear-btn" id="clearBtn">clear context</button>
+      </h2>
+      <div class="messages" id="messages"></div>
+      <div class="suggestions" id="suggestions">
+        <button data-q="What is the latest Cronos block?">What is the latest Cronos block?</button>
+        <button data-q="Get the balance of 0x742d35Cc6634C0532925a3b8D4C9B0A84e5A2D8e">Get a balance</button>
+        <button data-q="What time is it?">What time is it?</button>
+      </div>
+      <div class="input-row">
+        <input id="queryInput" type="text" placeholder="Ask about Cronos..." autocomplete="off" />
+        <button id="sendBtn">Send</button>
+      </div>
+    </section>
+
+    <!-- Response panel -->
+    <section class="panel panel-response">
+      <h2>Agent Response</h2>
+      <div class="response-body" id="responseBody">
+        <div class="response-empty">Ask something about Cronos to get started</div>
+      </div>
+    </section>
+
+    <!-- Attestation panel -->
+    <section class="panel panel-attestation">
+      <h2>🔒 TEE Attestation</h2>
+      <div id="attStatus" class="att-status yellow">⏳ Loading</div>
+      <div class="att-rows" id="attRows"></div>
+      <div class="att-meta" id="attMeta"></div>
+      <div class="att-errors" id="attErrors"></div>
+    </section>
+  </main>
+</div>
+
+<script>
+  const BACKEND_URL = window.location.origin.startsWith('http')
+    ? window.location.origin
+    : 'http://localhost:3000';
+
+  let context = [];
+  let inFlight = false;
+  let lastAttestationAt = null;
+
+  const $ = (id) => document.getElementById(id);
+  const messagesEl = $('messages');
+  const responseEl = $('responseBody');
+  const inputEl = $('queryInput');
+  const sendBtn = $('sendBtn');
+  const clearBtn = $('clearBtn');
+  const suggestionsEl = $('suggestions');
+  const attStatusEl = $('attStatus');
+  const attRowsEl = $('attRows');
+  const attMetaEl = $('attMeta');
+  const attErrorsEl = $('attErrors');
+
+  function truncate(s) {
+    if (!s || typeof s !== 'string') return '(empty)';
+    if (s.length <= 28) return s;
+    return s.slice(0, 16) + '...' + s.slice(-8);
+  }
+
+  function addMessage(role, text) {
+    const div = document.createElement('div');
+    div.className = 'msg ' + role;
+    div.textContent = text;
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return div;
+  }
+
+  function addLoadingMessage() {
+    const div = document.createElement('div');
+    div.className = 'msg loading';
+    div.innerHTML = 'Thinking <span class="dot-typing"></span>';
+    messagesEl.appendChild(div);
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+    return div;
+  }
+
+  function renderResponse(finalResponse, functionResponses) {
+    responseEl.innerHTML = '';
+    const body = document.createElement('div');
+    body.textContent = finalResponse || '(no response)';
+    responseEl.appendChild(body);
+
+    if (functionResponses && functionResponses.length > 0) {
+      const details = document.createElement('details');
+      details.className = 'tool-calls';
+      details.open = false;
+      const summary = document.createElement('summary');
+      summary.textContent = `Tool calls (${functionResponses.length})`;
+      details.appendChild(summary);
+
+      functionResponses.forEach((fr, i) => {
+        const tc = document.createElement('div');
+        tc.className = 'tool-call';
+        const status = fr.status || 'Unknown';
+        tc.innerHTML = `<span class="name">#${i + 1}</span> <span class="status-${status}">${status}</span>`;
+        const pre = document.createElement('pre');
+        pre.textContent = JSON.stringify(fr.data, null, 2);
+        tc.appendChild(pre);
+        details.appendChild(tc);
+      });
+      responseEl.appendChild(details);
+    }
+  }
+
+  async function sendQuery(query) {
+    if (inFlight || !query.trim()) return;
+    inFlight = true;
+    inputEl.disabled = true;
+    sendBtn.disabled = true;
+
+    if (suggestionsEl) { suggestionsEl.style.display = 'none'; }
+
+    addMessage('user', query);
+    const loadingEl = addLoadingMessage();
+
+    try {
+      const res = await fetch(BACKEND_URL + '/api/query', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ query, context }),
+      });
+      const data = await res.json();
+      loadingEl.remove();
+
+      if (!res.ok) {
+        const err = data.error || `HTTP ${res.status}`;
+        addMessage('agent', '⚠ Error: ' + err);
+        responseEl.innerHTML = '<div class="response-empty">Error: ' + err + '</div>';
+      } else {
+        context = data.context || context;
+        addMessage('agent', data.finalResponse || '(no response)');
+        renderResponse(data.finalResponse, data.functionResponses);
+      }
+    } catch (e) {
+      loadingEl.remove();
+      addMessage('agent', '⚠ Network error: ' + e.message);
+    } finally {
+      inFlight = false;
+      inputEl.disabled = false;
+      sendBtn.disabled = false;
+      inputEl.value = '';
+      inputEl.focus();
+      fetchAttestation();
+    }
+  }
+
+  function renderAttestation(data) {
+    lastAttestationAt = Date.now();
+    const report = data.report || {};
+    const isMock = data.mock === true;
+    const isValid = data.valid === true;
+
+    attStatusEl.className = 'att-status ' + (isMock ? 'yellow' : isValid ? 'green' : 'red');
+    attStatusEl.textContent = isMock ? '⚠ Mock Data' : isValid ? '✓ Attested' : '✗ Invalid';
+
+    const fields = [
+      ['MR_TD', report.mr_td, false],
+      ['RTMR0', report.rt_mr0, false],
+      ['RTMR1', report.rt_mr1, false],
+      ['RTMR2', report.rt_mr2, false],
+      ['RTMR3', report.rt_mr3, true],
+      ['REPORT_DATA', report.report_data, false],
+    ];
+
+    attRowsEl.innerHTML = '';
+    fields.forEach(([label, value, highlight]) => {
+      const row = document.createElement('div');
+      row.className = 'att-row' + (highlight ? ' rtmr3' : '');
+      const lbl = document.createElement('div');
+      lbl.className = 'label';
+      lbl.textContent = label;
+      const val = document.createElement('div');
+      val.className = 'value';
+      val.textContent = truncate(value);
+      val.title = value || '(empty)';
+      let expanded = false;
+      val.addEventListener('click', () => {
+        expanded = !expanded;
+        val.textContent = expanded ? (value || '(empty)') : truncate(value);
+      });
+      row.appendChild(lbl);
+      row.appendChild(val);
+      if (highlight) {
+        const ann = document.createElement('div');
+        ann.className = 'annotation';
+        ann.textContent = 'Proves docker-compose.yaml integrity';
+        row.appendChild(ann);
+      }
+      attRowsEl.appendChild(row);
+    });
+
+    attMetaEl.innerHTML =
+      '<div>TCB status: <span class="tcb">' + (report.tcb_status || 'unknown') + '</span></div>' +
+      '<div id="attAge">Last verified: just now</div>';
+
+    if (data.errors && data.errors.length > 0) {
+      attErrorsEl.textContent = data.errors.join(' · ');
+    } else {
+      attErrorsEl.textContent = '';
+    }
+  }
+
+  function updateAttestationAge() {
+    if (!lastAttestationAt) return;
+    const ageEl = document.getElementById('attAge');
+    if (!ageEl) return;
+    const s = Math.floor((Date.now() - lastAttestationAt) / 1000);
+    ageEl.textContent = 'Last verified: ' + (s < 1 ? 'just now' : s + 's ago');
+  }
+
+  async function fetchAttestation() {
+    try {
+      const res = await fetch(BACKEND_URL + '/api/attestation');
+      const data = await res.json();
+      renderAttestation(data);
+    } catch (e) {
+      attStatusEl.className = 'att-status red';
+      attStatusEl.textContent = '✗ Unreachable';
+      attErrorsEl.textContent = e.message;
+    }
+  }
+
+  // wire up
+  sendBtn.addEventListener('click', () => sendQuery(inputEl.value));
+  inputEl.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter') sendQuery(inputEl.value);
+  });
+  clearBtn.addEventListener('click', () => {
+    context = [];
+    messagesEl.innerHTML = '';
+    responseEl.innerHTML = '<div class="response-empty">Ask something about Cronos to get started</div>';
+    if (suggestionsEl) suggestionsEl.style.display = 'flex';
+  });
+  suggestionsEl.querySelectorAll('button').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      inputEl.value = btn.dataset.q;
+      sendQuery(btn.dataset.q);
+    });
+  });
+
+  fetchAttestation();
+  setInterval(updateAttestationAge, 1000);
+</script>
+</body>
+</html>
