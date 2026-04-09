@@ -2,7 +2,10 @@
 # Build context is the repo root (C:\dev\cronosxsecret\), not backend/.
 FROM node:20-alpine
 
-WORKDIR /app
+# Mirror the source tree layout (cronosxsecret/backend + cronosxsecret/frontend)
+# so express.static at ../../frontend (relative to dist/index.js) resolves
+# identically in dev and in the container.
+WORKDIR /app/backend
 
 # Install production dependencies
 COPY backend/package.json backend/package-lock.json ./
@@ -11,9 +14,8 @@ RUN npm ci --omit=dev && npm cache clean --force
 # Copy compiled backend
 COPY backend/dist ./dist
 
-# Copy frontend so express.static at ../../frontend (relative to dist/index.js)
-# resolves to /app/frontend
-COPY frontend ./frontend
+# Sibling to /app/backend — matches ../../frontend from /app/backend/dist/index.js
+COPY frontend /app/frontend
 
 ENV NODE_ENV=production
 ENV PORT=3000
