@@ -6,16 +6,14 @@
 <title>Cronos AI Agent — Private &amp; Attested</title>
 <style>
   :root {
-    --bg: #0a0a0f;
-    --panel: #12121a;
-    --panel-2: #1a1a25;
-    --border: #2a2a3a;
-    --text: #e5e7eb;
-    --muted: #8b8b9e;
-    --accent: #1a56db;
-    --accent-hover: #2563eb;
-    --gold: #f59e0b;
-    --gold-bg: rgba(245, 158, 11, 0.12);
+    --bg: #0f0a08;
+    --panel: #1a0f0a;
+    --panel-2: #251510;
+    --border: #3a2018;
+    --text: #f5f0ec;
+    --muted: #9a8070;
+    --accent: #e84b17;
+    --accent-hover: #ff5a24;
     --green: #10b981;
     --yellow: #f59e0b;
     --red: #ef4444;
@@ -184,12 +182,7 @@
     font-family: monospace; font-size: 11px; margin-top: 3px;
     word-break: break-all; cursor: pointer; color: var(--text);
   }
-  .att-row.rtmr3 {
-    background: var(--gold-bg);
-    border-color: var(--gold);
-  }
-  .att-row.rtmr3 .label { color: var(--gold); font-weight: 700; }
-  .att-row.rtmr3 .annotation { font-size: 10px; color: var(--gold); margin-top: 3px; font-style: italic; }
+  .att-row .annotation { font-size: 10px; color: var(--muted); margin-top: 3px; font-style: italic; }
 
   .att-meta { margin-top: 10px; font-size: 11px; color: var(--muted); }
   .att-meta .tcb { font-family: monospace; color: var(--text); }
@@ -212,7 +205,7 @@
     content: ""; width: 6px; height: 6px; border-radius: 50%;
     background: var(--accent);
   }
-  .att-section.secretai .att-section-header::before { background: var(--gold); }
+  .att-section.secretai .att-section-header::before { background: var(--accent); }
   .att-section .att-rows { flex: none; overflow: visible; }
   .att-llm-info {
     font-size: 11px; margin-bottom: 8px;
