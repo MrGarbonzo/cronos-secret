@@ -17,6 +17,12 @@ COPY backend/dist ./dist
 # Sibling to /app/backend — matches ../../frontend from /app/backend/dist/index.js
 COPY frontend /app/frontend
 
+# Git SHA of the source used to build this image — injected from CI so the
+# running container can surface a source link in the attestation response,
+# closing the trust loop (TDX proves binary → binary reports source commit).
+ARG GIT_SHA=unknown
+ENV GIT_SHA=${GIT_SHA}
+
 ENV NODE_ENV=production
 ENV PORT=3000
 EXPOSE 3000

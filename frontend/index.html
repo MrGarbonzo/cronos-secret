@@ -153,6 +153,26 @@
   .att-status.yellow { background: rgba(245,158,11,0.15); color: var(--yellow); border: 1px solid rgba(245,158,11,0.4); }
   .att-status.red { background: rgba(239,68,68,0.15); color: var(--red); border: 1px solid rgba(239,68,68,0.4); }
 
+  .att-source {
+    margin-bottom: 10px;
+    padding: 8px 10px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    font-size: 11px;
+  }
+  .att-source .label { color: var(--muted); text-transform: uppercase; letter-spacing: 0.05em; font-size: 10px; }
+  .att-source .repo { font-family: monospace; color: var(--text); margin-top: 3px; word-break: break-all; }
+  .att-source .commit { font-family: monospace; color: var(--muted); margin-top: 2px; }
+  .att-source a {
+    display: inline-block; margin-top: 6px;
+    color: var(--accent); text-decoration: none;
+    border: 1px solid var(--accent);
+    padding: 3px 8px; border-radius: 4px;
+    font-weight: 600;
+  }
+  .att-source a:hover { background: var(--accent); color: #fff; }
+
   .att-rows { flex: 1; overflow-y: auto; min-height: 0; }
   .att-row {
     padding: 8px 10px; border: 1px solid var(--border);
@@ -223,6 +243,7 @@
     <section class="panel panel-attestation">
       <h2>🔒 TEE Attestation</h2>
       <div id="attStatus" class="att-status yellow">⏳ Loading</div>
+      <div class="att-source" id="attSource"></div>
       <div class="att-rows" id="attRows"></div>
       <div class="att-meta" id="attMeta"></div>
       <div class="att-errors" id="attErrors"></div>
@@ -353,6 +374,23 @@
 
     attStatusEl.className = 'att-status ' + (isMock ? 'yellow' : isValid ? 'green' : 'red');
     attStatusEl.textContent = isMock ? '⚠ Mock Data' : isValid ? '✓ Attested' : '✗ Invalid';
+
+    // Source provenance — closes the attestation loop by linking out to the
+    // exact commit the running image was built from.
+    const src = data.source;
+    const attSourceEl = document.getElementById('attSource');
+    if (src && src.repo) {
+      const shortSha = src.commit && src.commit !== 'unknown' ? src.commit.slice(0, 12) : 'unknown';
+      const linkHref = src.commitUrl || src.repoUrl;
+      const linkText = src.commit && src.commit !== 'unknown' ? 'View commit on GitHub →' : 'View repo on GitHub →';
+      attSourceEl.innerHTML =
+        '<div class="label">Source</div>' +
+        '<div class="repo">' + src.repo + '</div>' +
+        '<div class="commit">' + shortSha + '</div>' +
+        '<a href="' + linkHref + '" target="_blank" rel="noopener noreferrer">' + linkText + '</a>';
+    } else {
+      attSourceEl.innerHTML = '';
+    }
 
     const fields = [
       ['MR_TD', report.mr_td, false],

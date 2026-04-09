@@ -13,6 +13,25 @@ const router = Router();
 const ATTESTATION_URL =
   process.env.ATTESTATION_URL || 'https://172.17.0.1:29343/cpu';
 
+// Source provenance — baked in at docker build time via GIT_SHA build arg.
+// Lets the frontend render a clickable link from the attestation panel
+// straight to the exact commit of the code running inside the TEE.
+const SOURCE_REPO = process.env.SOURCE_REPO || 'MrGarbonzo/cronos-secret';
+const GIT_SHA = process.env.GIT_SHA || 'unknown';
+const sourceInfo = {
+  repo: SOURCE_REPO,
+  commit: GIT_SHA,
+  repoUrl: `https://github.com/${SOURCE_REPO}`,
+  commitUrl:
+    GIT_SHA === 'unknown'
+      ? null
+      : `https://github.com/${SOURCE_REPO}/commit/${GIT_SHA}`,
+  treeUrl:
+    GIT_SHA === 'unknown'
+      ? null
+      : `https://github.com/${SOURCE_REPO}/tree/${GIT_SHA}`,
+};
+
 interface ParsedAttestation {
   valid: boolean;
   mock?: boolean;
@@ -88,7 +107,7 @@ router.get('/', async (_req, res) => {
   } catch (fetchErr) {
     const msg = fetchErr instanceof Error ? fetchErr.message : 'unknown';
     logger.warn(`Attestation endpoint unreachable, returning mock: ${msg}`);
-    return res.json(mockAttestation(msg));
+    return res.json({ ...mockAttestation(msg), source: sourceInfo });
   }
 
   // The attestation agent returns a raw hex-encoded TDX quote.
@@ -114,6 +133,7 @@ router.get('/', async (_req, res) => {
         report_data: result.report?.report_data,
         tcb_status: result.report?.tcb_status,
       },
+      source: sourceInfo,
       errors: result.errors || [],
     });
   } catch (verifyErr) {
@@ -122,6 +142,7 @@ router.get('/', async (_req, res) => {
     return res.status(500).json({
       valid: false,
       report: {},
+      source: sourceInfo,
       errors: [`secretvm-verify error: ${msg}`],
     });
   }
